@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeOperators, GADTs, TypeFamilies, FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, StandaloneDeriving, TupleSections #-}
+{-# LANGUAGE UndecidableInstances #-}
 -- |
 -- Module      : Data.Array.Accelerate.Array.Sugar
 -- Copyright   : [2008..2011] Manuel M T Chakravarty, Gabriele Keller, Sean Lee, Trevor L. McDonell
@@ -18,10 +19,11 @@ module Data.Array.Accelerate.Array.Sugar (
 
   -- * Class of supported surface element types and their mapping to representation types
   Elt(..), EltRepr, EltRepr',
-  ShapeElt(..), SliceElt(..),
+  ShapeElt(..), SliceElt(..), 
   
   -- * Derived functions
   liftToElt, liftToElt2, sinkFromElt, sinkFromElt2,
+  liftToEltFromShapeElt, sinkFromShapeElt, sinkFromShapeEltToShapeElt,
 
   -- * Array shapes
   DIM0, DIM1, DIM2, DIM3, DIM4, DIM5, DIM6, DIM7, DIM8, DIM9,
@@ -620,6 +622,32 @@ sinkFromElt2 :: (Elt a, Elt b, Elt c)
 {-# INLINE sinkFromElt2 #-}
 sinkFromElt2 f = \x y -> fromElt $ f (toElt x) (toElt y)
 
+liftToEltFromShapeElt :: (ShapeElt a, Elt b)
+               => (ShapeEltRepr a -> EltRepr b)
+               -> (a -> b)
+{-# INLINE liftToEltFromShapeElt #-}               
+liftToEltFromShapeElt f = toElt . f . fromShapeElt
+
+sinkFromShapeElt :: (ShapeElt a, Elt b) 
+                 => (a -> b)
+                 -> (ShapeEltRepr a -> EltRepr b)
+{-# INLINE sinkFromShapeElt #-}
+sinkFromShapeElt f = fromElt . f . toShapeElt
+
+sinkFromShapeEltToShapeElt :: (ShapeElt a, ShapeElt b) 
+                 => (a -> b)
+                 -> (ShapeEltRepr a -> ShapeEltRepr b)
+{-# INLINE sinkFromShapeEltToShapeElt #-}
+sinkFromShapeEltToShapeElt f = fromShapeElt . f . toShapeElt
+
+-- sinkFromShapeElt2 :: (ShapeElt a, ShapeElt b, ShapeElt c) 
+--              => (a -> b -> c)
+--              -> (ShapeEltRepr a -> ShapeEltRepr b -> ShapeEltRepr c)
+-- {-# INLINE sinkFromShapeElt2 #-}
+-- sinkFromShapeElt2 f = \x y -> fromShapeElt $ f (toShapeElt x) (toShapeElt y)
+
+
+
 {-# RULES
 
 "fromElt/toElt" forall e.
@@ -635,6 +663,8 @@ sinkFromElt2 f = \x y -> fromElt $ f (toElt x) (toElt y)
 --
 class (Typeable (SliceAnyRepr a),
        ArrayElt (SliceAnyRepr a),
+       Typeable (ShapeEltRepr a),
+       ArrayElt (ShapeEltRepr a),
        SliceElt a) => ShapeElt a where
   -- | Mapping from Shape element types to representation types for Shapes
   --   (in module D.A.A.Array.Representation)
@@ -747,7 +777,8 @@ type DIM9 = DIM8:.Int
 
 -- |Shapes and indices of multi-dimensional arrays
 --
-class (ShapeElt sh, Repr.Slice (SliceAnyRepr sh), Repr.Shape (EltRepr sh)) => Shape sh where
+class (ShapeElt sh, Repr.Slice (SliceAnyRepr sh), 
+       Repr.Shape (ShapeEltRepr sh)) => Shape sh where
 
   -- |Number of dimensions of a /shape/ or /index/ (>= 0).
   dim    :: sh -> Int
@@ -784,28 +815,28 @@ class (ShapeElt sh, Repr.Slice (SliceAnyRepr sh), Repr.Shape (EltRepr sh)) => Sh
   listToShape :: [Int] -> sh
   
 
-  dim              = Repr.dim . fromElt
-  size             = Repr.size . fromElt
+  dim              = Repr.dim . fromShapeElt
+  size             = Repr.size . fromShapeElt
   -- (#) must be individually defined, as it only hold for all instances *except* the one with the
   -- largest arity
 
-  ignore           = toElt Repr.ignore
-  index sh ix      = Repr.index (fromElt sh) (fromElt ix)
-  bound sh ix bndy = case Repr.bound (fromElt sh) (fromElt ix) bndy of
+  ignore           = toShapeElt Repr.ignore
+  index sh ix      = Repr.index (fromShapeElt sh) (fromShapeElt ix)
+  bound sh ix bndy = case Repr.bound (fromShapeElt sh) (fromShapeElt ix) bndy of
                        Left v    -> Left v
-                       Right ix' -> Right $ toElt ix'
+                       Right ix' -> Right $ toShapeElt ix'
 
-  iter sh f c r = Repr.iter (fromElt sh) (f . toElt) c r
+  iter sh f c r = Repr.iter (fromShapeElt sh) (f . toShapeElt) c r
 
   rangeToShape (low, high) 
-    = toElt (Repr.rangeToShape (fromElt low, fromElt high))
+    = toShapeElt (Repr.rangeToShape (fromShapeElt low, fromShapeElt high))
   shapeToRange ix
-    = let (low, high) = Repr.shapeToRange (fromElt ix)
+    = let (low, high) = Repr.shapeToRange (fromShapeElt ix)
       in
-      (toElt low, toElt high)
+      (toShapeElt low, toShapeElt high)
 
-  shapeToList = Repr.shapeToList . fromElt
-  listToShape = toElt . Repr.listToShape
+  shapeToList = Repr.shapeToList . fromShapeElt
+  listToShape = toShapeElt . Repr.listToShape
 
 instance Shape Z
 instance Shape sh => Shape (sh:.Int)
@@ -849,21 +880,52 @@ instance Slice sl => Slice (sl:.Int) where
   type FullShape    (sl:.Int) = FullShape sl :. Int
   sliceIndex _ = Repr.SliceFixed (sliceIndex (undefined::sl))
 
-instance Slice (Any Z) where
-  type SliceShape   (Any Z) = Z
-  type CoSliceShape (Any Z) = Z
-  type FullShape    (Any Z) = Z
-  sliceIndex _ = Repr.SliceNil
 
-instance (Shape sh,
-          Slice (Any sh),
-          Shape (SliceShape (Any sh)),
-          Shape (CoSliceShape (Any sh)),
-          Shape (FullShape (Any sh))) => Slice (Any (sh:.Int)) where
-  type SliceShape   (Any (sh:.Int)) = SliceShape   (Any sh) :. Int
-  type CoSliceShape (Any (sh:.Int)) = CoSliceShape (Any sh)
-  type FullShape    (Any (sh:.Int)) = FullShape    (Any sh) :. Int
-  sliceIndex _ = Repr.SliceAll (sliceIndex (undefined :: Any sh))
+class Shape sh => SliceAny sh where
+  type SliceShape' sh :: *
+  type CoSliceShape' sh :: *
+  type FullShape' sh :: * 
+  sliceIndexAny :: sh -> Repr.SliceIndex (SliceAnyRepr sh)
+                                          (ShapeEltRepr (SliceShape'   sh))
+                                          (ShapeEltRepr (CoSliceShape' sh))
+                                          (ShapeEltRepr (FullShape'    sh))
+
+instance SliceAny Z where
+  type SliceShape'   Z = Z
+  type CoSliceShape' Z = Z
+  type FullShape'    Z = Z
+  sliceIndexAny _ = Repr.SliceNil
+
+instance SliceAny sh => SliceAny (sh:.Int) where
+  type SliceShape'   (sh:.Int) = SliceShape'   sh :. Int
+  type CoSliceShape' (sh:.Int) = CoSliceShape' sh 
+  type FullShape'    (sh:.Int) = FullShape'    sh :. Int  
+  sliceIndexAny _              = Repr.SliceAll (sliceIndexAny (undefined::sh))
+
+instance (SliceAny sh,
+          Shape (SliceShape' sh),
+          Shape (CoSliceShape' sh),
+          Shape (FullShape' sh)) => Slice (Any sh) where
+  type SliceShape   (Any sh) = SliceShape' sh
+  type CoSliceShape (Any sh) = CoSliceShape' sh
+  type FullShape    (Any sh) = FullShape' sh
+  sliceIndex _ = sliceIndexAny (undefined :: sh)
+
+-- instance Slice (Any Z) where
+--   type SliceShape   (Any Z) = Z
+--   type CoSliceShape (Any Z) = Z
+--   type FullShape    (Any Z) = Z
+--   sliceIndex _ = Repr.SliceNil
+-- 
+-- instance (Shape sh,
+--           Slice (Any sh),
+--           Shape (SliceShape (Any sh)),
+--           Shape (CoSliceShape (Any sh)),
+--           Shape (FullShape (Any sh))) => Slice (Any (sh:.Int)) where
+--   type SliceShape   (Any (sh:.Int)) = SliceShape   (Any sh) :. Int
+--   type CoSliceShape (Any (sh:.Int)) = CoSliceShape (Any sh)
+--   type FullShape    (Any (sh:.Int)) = FullShape    (Any sh) :. Int
+--   sliceIndex _ = Repr.SliceAll (sliceIndex (undefined :: Any sh))
 
 -- Array operations
 -- ----------------
@@ -906,21 +968,22 @@ allocateArray sh = adata `seq` Array (fromShapeElt sh) adata
 
 -- |Convert an 'IArray' to an accelerated array.
 --
-fromIArray :: (EltRepr ix ~ EltRepr sh, IArray a e, IArray.Ix ix, Shape sh, Elt ix, Elt e)
+fromIArray :: (ShapeEltRepr ix ~ ShapeEltRepr sh, IArray a e, IArray.Ix ix, Shape sh, 
+               ShapeElt ix, Elt e)
            => a ix e -> Array sh e
-fromIArray iarr = newArray (toElt sh) (\ix -> iarr IArray.! toElt (fromElt ix))
+fromIArray iarr = newArray (toShapeElt sh) (\ix -> iarr IArray.! toShapeElt (fromShapeElt ix))
   where
     (lo,hi) = IArray.bounds iarr
-    sh      = Repr.rangeToShape (fromElt lo, fromElt hi)
+    sh      = Repr.rangeToShape (fromShapeElt lo, fromShapeElt hi)
 
 -- |Convert an accelerated array to an 'IArray'
 -- 
-toIArray :: (EltRepr ix ~ EltRepr sh, IArray a e, IArray.Ix ix, Shape sh, Elt ix, Elt e) 
+toIArray :: (ShapeEltRepr ix ~ ShapeEltRepr sh, IArray a e, IArray.Ix ix, Shape sh, ShapeElt ix, Elt e) 
          => Array sh e -> a ix e
-toIArray arr = IArray.array bnds [(ix, arr ! toElt (fromElt ix)) | ix <- IArray.range bnds]
+toIArray arr = IArray.array bnds [(ix, arr ! toShapeElt (fromShapeElt ix)) | ix <- IArray.range bnds]
   where
-    (lo,hi) = Repr.shapeToRange (fromElt (shape arr))
-    bnds    = (toElt lo, toElt hi)
+    (lo,hi) = Repr.shapeToRange (fromShapeElt (shape arr))
+    bnds    = (toShapeElt lo, toShapeElt hi)
 
 -- |Convert a list (with elements in row-major order) to an accelerated array.
 --

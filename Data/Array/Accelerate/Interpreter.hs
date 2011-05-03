@@ -190,7 +190,7 @@ generateOp :: (Sugar.Shape dim, Sugar.Elt e)
       => dim
       -> (dim -> e)
       -> Delayed (Array dim e)
-generateOp sh rf = DelayedArray (Sugar.fromElt sh) (Sugar.sinkFromElt rf)
+generateOp sh rf = DelayedArray (Sugar.fromShapeElt sh) (Sugar.sinkFromShapeElt rf)
 
 reshapeOp :: Sugar.Shape dim 
           => dim -> Delayed (Array dim' e) -> Delayed (Array dim e)
@@ -198,20 +198,20 @@ reshapeOp newShape darr@(DelayedArray {shapeDA = oldShape})
   = let Array _ adata = force darr
     in 
     BOUNDS_CHECK(check) "reshape" "shape mismatch" (Sugar.size newShape == size oldShape)
-    $ delay $ Array (Sugar.fromElt newShape) adata
+    $ delay $ Array (Sugar.fromShapeElt newShape) adata
 
-replicateOp :: (Sugar.Shape dim, Sugar.Elt slix)
-            => SliceIndex (Sugar.EltRepr slix)
-                          (Sugar.EltRepr sl)
+replicateOp :: (Sugar.Shape dim, Sugar.SliceElt slix)
+            => SliceIndex (Sugar.SliceEltRepr slix)
+                          (Sugar.ShapeEltRepr sl)
                           co
-                          (Sugar.EltRepr dim)
+                          (Sugar.ShapeEltRepr dim)
             -> slix
             -> Delayed (Array sl e)
             -> Delayed (Array dim e)
 replicateOp sliceIndex slix (DelayedArray sh pf)
   = DelayedArray sh' (pf . pf')
   where
-    (sh', pf') = extend sliceIndex (Sugar.fromElt slix) sh
+    (sh', pf') = extend sliceIndex (Sugar.fromSliceElt slix) sh
 
     extend :: SliceIndex slix sl co dim
            -> slix
@@ -227,18 +227,18 @@ replicateOp sliceIndex slix (DelayedArray sh pf)
         in
         ((dim', sz), \(ix, _) -> f' ix)
 
-indexOp :: (Sugar.Shape sl, Sugar.Elt slix)
-        => SliceIndex (Sugar.EltRepr slix)
-                      (Sugar.EltRepr sl)
+indexOp :: (Sugar.Shape sl, Sugar.SliceElt slix)
+        => SliceIndex (Sugar.SliceEltRepr slix)
+                      (Sugar.ShapeEltRepr sl)
                       co
-                      (Sugar.EltRepr dim)
+                      (Sugar.ShapeEltRepr dim)
         -> Delayed (Array dim e)
         -> slix
         -> Delayed (Array sl e)
 indexOp sliceIndex (DelayedArray sh pf) slix
   = DelayedArray sh' (pf . pf')
   where
-    (sh', pf') = restrict sliceIndex (Sugar.fromElt slix) sh
+    (sh', pf') = restrict sliceIndex (Sugar.fromSliceElt slix) sh
 
     restrict :: SliceIndex slix sl co dim
              -> slix
@@ -291,52 +291,54 @@ foldSegOp :: forall e dim.
           -> Delayed (Array (dim:.Int) e)
           -> Delayed Segments
           -> Delayed (Array (dim:.Int) e)
-foldSegOp f e (DelayedArray (sh, _n) rf) seg@(DelayedArray shSeg rfSeg)
-  = delay arr
-  where
-    DelayedPair (DelayedArray _shSeg rfStarts) _ = scanl'Op (+) 0 seg
-    arr = Sugar.newArray (Sugar.toElt (sh, Sugar.toElt shSeg)) foldOne
-    --
-    foldOne :: dim:.Int -> e
-    foldOne ix = let
-                   (ix', i) = Sugar.fromElt ix
-                   start    = (Sugar.liftToElt rfStarts) i
-                   len      = (Sugar.liftToElt rfSeg) i
-                 in
-                 fold ix' e start (start + len)
-
-    fold :: Sugar.EltRepr dim -> e -> Int -> Int -> e
-    fold ix' v j end
-      | j >= end  = v
-      | otherwise = fold ix' (f v (Sugar.toElt . rf $ (ix', j))) (j + 1) end
+foldSegOp = undefined
+-- foldSegOp f e (DelayedArray (sh, _n) rf) seg@(DelayedArray shSeg rfSeg)
+--   = delay arr
+--   where
+--     DelayedPair (DelayedArray _shSeg rfStarts) _ = scanl'Op (+) 0 seg
+--     arr = Sugar.newArray (Sugar.toElt (sh, Sugar.toElt shSeg)) foldOne
+--     --
+--     foldOne :: dim:.Int -> e
+--     foldOne ix = let
+--                    (ix', i) = Sugar.fromElt ix
+--                    start    = (Sugar.liftToElt rfStarts) i
+--                    len      = (Sugar.liftToElt rfSeg) i
+--                  in
+--                  fold ix' e start (start + len)
+-- 
+--     fold :: Sugar.EltRepr dim -> e -> Int -> Int -> e
+--     fold ix' v j end
+--       | j >= end  = v
+--       | otherwise = fold ix' (f v (Sugar.toElt . rf $ (ix', j))) (j + 1) end
 
 fold1SegOp :: forall e dim.
               (e -> e -> e)
            -> Delayed (Array (dim:.Int) e)
            -> Delayed Segments
            -> Delayed (Array (dim:.Int) e)
-fold1SegOp f (DelayedArray (sh, _n) rf) seg@(DelayedArray shSeg rfSeg)
-  = delay arr
-  where
-    DelayedPair (DelayedArray _shSeg rfStarts) _ = scanl'Op (+) 0 seg
-    arr = Sugar.newArray (Sugar.toElt (sh, Sugar.toElt shSeg)) foldOne
-    --
-    foldOne :: dim:.Int -> e
-    foldOne ix = let
-                   (ix', i) = Sugar.fromElt ix
-                   start    = (Sugar.liftToElt rfStarts) i
-                   len      = (Sugar.liftToElt rfSeg) i
-                 in
-                 if len == 0
-                   then
-                     BOUNDS_ERROR(error) "fold1Seg" "empty iteration space"
-                   else
-                     fold ix' (Sugar.toElt . rf $ (ix', start)) (start + 1) (start + len)
-
-    fold :: Sugar.EltRepr dim -> e -> Int -> Int -> e
-    fold ix' v j end
-      | j >= end  = v
-      | otherwise = fold ix' (f v (Sugar.toElt . rf $ (ix', j))) (j + 1) end
+fold1SegOp = undefined
+-- fold1SegOp f (DelayedArray (sh, _n) rf) seg@(DelayedArray shSeg rfSeg)
+--   = delay arr
+--   where
+--     DelayedPair (DelayedArray _shSeg rfStarts) _ = scanl'Op (+) 0 seg
+--     arr = Sugar.newArray (Sugar.toElt (sh, Sugar.toElt shSeg)) foldOne
+--     --
+--     foldOne :: dim:.Int -> e
+--     foldOne ix = let
+--                    (ix', i) = Sugar.fromElt ix
+--                    start    = (Sugar.liftToElt rfStarts) i
+--                    len      = (Sugar.liftToElt rfSeg) i
+--                  in
+--                  if len == 0
+--                    then
+--                      BOUNDS_ERROR(error) "fold1Seg" "empty iteration space"
+--                    else
+--                      fold ix' (Sugar.toElt . rf $ (ix', start)) (start + 1) (start + len)
+-- 
+--     fold :: Sugar.EltRepr dim -> e -> Int -> Int -> e
+--     fold ix' v j end
+--       | j >= end  = v
+--       | otherwise = fold ix' (f v (Sugar.toElt . rf $ (ix', j))) (j + 1) end
 
 scanlOp :: forall e. (e -> e -> e)
         -> e
@@ -506,7 +508,7 @@ permuteOp f (DelayedArray dftsSh dftsPf) p (DelayedArray sh pf)
             -- the target dimension (where it gets combined with the current
             -- default)
           let update ix = do
-                            let target = (Sugar.sinkFromElt p) ix
+                            let target = (Sugar.sinkFromShapeEltToShapeElt p) ix
                             unless (target == ignore) $ do
                               let i = index dftsSh target
                               e <- readArrayData arr i
@@ -522,7 +524,7 @@ backpermuteOp :: Sugar.Shape dim'
               -> Delayed (Array dim e)
               -> Delayed (Array dim' e)
 backpermuteOp sh' p (DelayedArray _sh rf)
-  = DelayedArray (Sugar.fromElt sh') (rf . Sugar.sinkFromElt p)
+  = DelayedArray (Sugar.fromShapeElt sh') (rf . (Sugar.sinkFromShapeEltToShapeElt p))
 
 stencilOp :: forall dim e e' stencil. (Sugar.Elt e, Sugar.Elt e', Stencil dim e stencil)
           => (stencil -> e')
@@ -532,13 +534,13 @@ stencilOp :: forall dim e e' stencil. (Sugar.Elt e, Sugar.Elt e', Stencil dim e 
 stencilOp sten bndy (DelayedArray sh rf)
   = DelayedArray sh rf'
   where
-    rf' = Sugar.sinkFromElt (sten . stencilAccess rfBounded)
+    rf' = Sugar.sinkFromShapeElt (sten . stencilAccess rfBounded)
 
     -- add a boundary to the source array as specified by the boundary condition
     rfBounded :: dim -> e
-    rfBounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toElt sh) ix bndy of
+    rfBounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toShapeElt sh) ix bndy of
                                     Left v    -> v
-                                    Right ix' -> rf (Sugar.fromElt ix')
+                                    Right ix' -> rf (Sugar.fromShapeElt ix')
 
 stencil2Op :: forall dim e1 e2 e' stencil1 stencil2. 
               (Sugar.Elt e1, Sugar.Elt e2, Sugar.Elt e', 
@@ -552,20 +554,21 @@ stencil2Op :: forall dim e1 e2 e' stencil1 stencil2.
 stencil2Op sten bndy1 (DelayedArray sh1 rf1) bndy2 (DelayedArray sh2 rf2)
   = DelayedArray (sh1 `intersect` sh2) rf'
   where
-    rf' = Sugar.sinkFromElt (\ix -> sten (stencilAccess rf1Bounded ix)
-                                         (stencilAccess rf2Bounded ix))
+    rf' :: Sugar.ShapeEltRepr dim -> Sugar.EltRepr e'
+    rf' = Sugar.sinkFromShapeElt (\ix -> sten (stencilAccess rf1Bounded ix)
+                                              (stencilAccess rf2Bounded ix))
 
     -- add a boundary to the source arrays as specified by the boundary conditions
     
     rf1Bounded :: dim -> e1
-    rf1Bounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toElt sh1) ix bndy1 of
+    rf1Bounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toShapeElt sh1) ix bndy1 of
                                      Left v    -> v
-                                     Right ix' -> rf1 (Sugar.fromElt ix')
+                                     Right ix' -> rf1 (Sugar.fromShapeElt ix')
 
     rf2Bounded :: dim -> e2
-    rf2Bounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toElt sh2) ix bndy2 of
+    rf2Bounded ix = Sugar.toElt $ case Sugar.bound (Sugar.toShapeElt sh2) ix bndy2 of
                                      Left v    -> v
-                                     Right ix' -> rf2 (Sugar.fromElt ix')
+                                     Right ix' -> rf2 (Sugar.fromShapeElt ix')
 
 
 -- Expression evaluation
@@ -631,7 +634,7 @@ evalOpenExp (PrimApp p arg) env aenv
 evalOpenExp (IndexScalar acc ix) env aenv 
   = case evalOpenAcc acc aenv of
       DelayedArray sh pf -> 
-        let ix' = Sugar.fromElt $ evalOpenExp ix env aenv
+        let ix' = Sugar.fromShapeElt $ evalOpenExp ix env aenv
         in
         index sh ix' `seq` (Sugar.toElt $ pf ix')
                               -- FIXME: This is ugly, but (possibly) needed to
@@ -639,7 +642,7 @@ evalOpenExp (IndexScalar acc ix) env aenv
 
 evalOpenExp (Shape acc) _ aenv 
   = case force $ evalOpenAcc acc aenv of
-      Array sh _ -> Sugar.toElt sh
+      Array sh _ -> Sugar.toShapeElt sh
 
 evalOpenExp (Size acc) _ aenv 
   = case force $ evalOpenAcc acc aenv of

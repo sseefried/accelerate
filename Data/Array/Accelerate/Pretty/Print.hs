@@ -327,7 +327,7 @@ prettyArray :: forall dim e. Array dim e -> Doc
 prettyArray arr@(Array sh _)
   = parens $
       hang (text "Array") 2 $
-        sep [showDoc (toElt sh :: dim), dataDoc]
+        sep [showDoc (toShapeElt sh :: dim), dataDoc]
   where
     showDoc :: forall a. Show a => a -> Doc
     showDoc = text . show

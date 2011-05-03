@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators, ScopedTypeVariables, FlexibleContexts #-}
 module SliceExamples where
 
 import Data.Array.Accelerate as Acc
@@ -41,17 +41,17 @@ test3 = run $ Acc.replicate slice3 arr
 -- repN. Replicates an array into the rightmost dimension of
 -- the result array.
 --
-repN :: forall sh e. (Shape sh, Elt e)
+repN :: forall sh e. (Shape sh,  Elt e)
      => Int 
      -> Acc (Array sh e)
      -> Acc (Array (sh:.Int) e)
-repN n a = Acc.replicate (lift (Any:.n :: Any sh:.Int)) a
-
-rep1 :: Acc (Array DIM0 Int) -> Acc (Array DIM1 Int)
-rep1 = repN 2
-
-rep2 :: Acc (Array DIM2 Int) -> Acc (Array DIM3 Int)
-rep2 = repN 2
+repN n a = Acc.replicate (lift (Any:.n   :: Any sh:.Int)) a
+-- 
+-- rep1 :: Acc (Array DIM0 Int) -> Acc (Array DIM1 Int)
+-- rep1 = repN 2
+-- 
+-- rep2 :: Acc (Array DIM2 Int) -> Acc (Array DIM3 Int)
+-- rep2 = repN 2
 
 rep2' :: Acc (Array DIM2 Int) -> Acc (Array DIM3 Int)
 rep2' = Acc.replicate (lift (Z:.All:.All:.(2::Int)))

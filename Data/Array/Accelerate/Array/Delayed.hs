@@ -40,11 +40,11 @@ instance Delayable () where
 instance Delayable (Array sh e) where
   data Delayed (Array sh e) 
     = (Shape sh, Elt e) => 
-      DelayedArray { shapeDA :: EltRepr sh
-                   , repfDA  :: EltRepr sh -> EltRepr e
+      DelayedArray { shapeDA :: ShapeEltRepr sh
+                   , repfDA  :: ShapeEltRepr sh -> EltRepr e
                    }
-  delay arr@(Array sh _)    = DelayedArray sh (fromElt . (arr!) . toElt)
-  force (DelayedArray sh f) = newArray (toElt sh) (toElt . f . fromElt)
+  delay arr@(Array sh _)    = DelayedArray sh (fromElt . (arr!) . toShapeElt)
+  force (DelayedArray sh f) = newArray (toShapeElt sh) (toElt . f . fromShapeElt)
   
 instance (Delayable a1, Delayable a2) => Delayable (a1, a2) where
   data Delayed (a1, a2) = DelayedPair (Delayed a1) (Delayed a2)
