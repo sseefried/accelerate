@@ -646,41 +646,60 @@ class (Typeable (SliceAnyRepr a),
   -- the same as the slice 'Z:.All:. ... :. All'
   type SliceAnyRepr a :: *
   sliceAnyEltType :: {-dummy-} a -> TupleType (SliceAnyRepr a)
+  shapeEltType    :: {-dummy-} a -> TupleType (ShapeEltRepr a)
+  fromShapeElt    :: a -> ShapeEltRepr a
+  toShapeElt      :: ShapeEltRepr a -> a
   toSliceAnyRepr  :: {-dummy-} a -> SliceAnyRepr a
 
 instance ShapeElt Z where
   type ShapeEltRepr Z            = ()
   type SliceAnyRepr Z            = ()
   sliceAnyEltType _ = UnitTuple
-  toSliceAnyRepr _ = ()
+  shapeEltType Z    = UnitTuple
+  fromShapeElt Z    = ()
+  toShapeElt  ()    = Z
+  toSliceAnyRepr _  = ()
+
 
 instance ShapeElt sh => ShapeElt (sh:.Int) where
   type ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
   type SliceAnyRepr (sh:.Int) = (SliceAnyRepr sh, ())
-  sliceAnyEltType _ = PairTuple (sliceAnyEltType (undefined::sh)) UnitTuple
-  toSliceAnyRepr _ = (toSliceAnyRepr (undefined::sh), ())
+  sliceAnyEltType _    = PairTuple (sliceAnyEltType (undefined::sh)) UnitTuple
+  shapeEltType _       = PairTuple (shapeEltType (undefined::sh)) (SingleTuple scalarType)
+  fromShapeElt (sh:.i) = (fromShapeElt sh, i)
+  toShapeElt  (sh, i)  = toShapeElt sh :. i
+  toSliceAnyRepr _     = (toSliceAnyRepr (undefined::sh), ())
 
 class (Typeable (SliceEltRepr a),
        ArrayElt (SliceEltRepr a),
        Elt a) => SliceElt a where
   type SliceEltRepr a :: *
   sliceEltType :: {-dummy-} a -> TupleType (SliceEltRepr a)
+  fromSliceElt :: a -> SliceEltRepr a
+  toSliceElt   :: SliceEltRepr a -> a
 
 instance SliceElt Z where
   type SliceEltRepr Z   = ()
   sliceEltType _ = UnitTuple
-
+  fromSliceElt Z = ()
+  toSliceElt  () = Z
 instance SliceElt sl => SliceElt (sl:.All) where
   type SliceEltRepr (sl:.All) = (SliceEltRepr sl, ())
-  sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) UnitTuple
+  sliceEltType _         = PairTuple (sliceEltType (undefined::sl)) UnitTuple
+  fromSliceElt (sh:.All) = (fromSliceElt sh, ())
+  toSliceElt (sh, ())    = toSliceElt sh:.All
 
 instance SliceElt sl => SliceElt (sl:.Int) where
   type SliceEltRepr (sl:.Int) = (SliceEltRepr sl, Int)
-  sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) (SingleTuple scalarType)
+  sliceEltType _       = PairTuple (sliceEltType (undefined::sl)) (SingleTuple scalarType)
+  fromSliceElt (sh:.i) = (fromSliceElt sh, i)
+  toSliceElt (sh, i)   = toSliceElt sh:.i
 
 instance ShapeElt sh => SliceElt (Any sh) where
   type SliceEltRepr (Any sh) = SliceAnyRepr sh
   sliceEltType _ = sliceAnyEltType (undefined ::sh)
+  fromSliceElt Any = toSliceAnyRepr (undefined :: sh)
+  toSliceElt _     = Any
 
 -- Surface arrays
 -- --------------
@@ -693,7 +712,7 @@ instance ShapeElt sh => SliceElt (Any sh) where
 --
 data Array sh e where
   Array :: (Shape sh, Elt e) 
-        => EltRepr sh                 -- extent of dimensions = shape
+        => EltRepr sh               -- extent of dimensions = shape
         -> ArrayData (EltRepr e)      -- array payload
         -> Array sh e
 
