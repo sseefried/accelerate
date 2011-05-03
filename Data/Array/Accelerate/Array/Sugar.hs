@@ -18,6 +18,7 @@ module Data.Array.Accelerate.Array.Sugar (
 
   -- * Class of supported surface element types and their mapping to representation types
   Elt(..), EltRepr, EltRepr',
+  ShapeElt(..), SliceElt(..),
   
   -- * Derived functions
   liftToElt, liftToElt2, sinkFromElt, sinkFromElt2,
@@ -26,7 +27,7 @@ module Data.Array.Accelerate.Array.Sugar (
   DIM0, DIM1, DIM2, DIM3, DIM4, DIM5, DIM6, DIM7, DIM8, DIM9,
 
   -- * Array indexing and slicing
-  Z(..), (:.)(..), All(..), Any(..), Shape(..), Slice(..), convertSliceIndex,
+  Z(..), (:.)(..), All(..), Any(..), Shape(..), Slice(..),
   
   -- * Array shape query, indexing, and conversions
   shape, (!), newArray, allocateArray, fromIArray, toIArray, fromList, toList,
@@ -37,7 +38,7 @@ module Data.Array.Accelerate.Array.Sugar (
 import Data.Array.IArray (IArray)
 import qualified Data.Array.IArray as IArray
 import Data.Typeable
-import Unsafe.Coerce
+
 
 -- friends
 import Data.Array.Accelerate.Type
@@ -655,7 +656,7 @@ instance ShapeElt Z where
 
 instance ShapeElt sh => ShapeElt (sh:.Int) where
   type ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
-  type SliceAnyRepr (sl:.Int) = (SliceAnyRepr sl, ())
+  type SliceAnyRepr (sh:.Int) = (SliceAnyRepr sh, ())
   sliceAnyEltType _ = PairTuple (sliceAnyEltType (undefined::sh)) UnitTuple
   toSliceAnyRepr _ = (toSliceAnyRepr (undefined::sh), ())
 
@@ -845,23 +846,6 @@ instance (Shape sh,
   type CoSliceShape (Any (sh:.Int)) = CoSliceShape (Any sh)
   type FullShape    (Any (sh:.Int)) = FullShape    (Any sh) :. Int
   sliceIndex _ = Repr.SliceAll (sliceIndex (undefined :: Any sh))
-
-class SliceIxConv slix where
-  convertSliceIndex :: slix {- dummy to fix the type variable -}
-                    -> Repr.SliceIndex (EltRepr slix)
-                                       (Repr.SliceShape   (EltRepr slix))
-                                       (Repr.CoSliceShape (EltRepr slix))
-                                       (Repr.FullShape    (EltRepr slix))
-                    -> Repr.SliceIndex (EltRepr slix)
-                                       (EltRepr (SliceShape   slix))
-                                       (EltRepr (CoSliceShape slix))
-                                       (EltRepr (FullShape    slix))
-
-instance SliceIxConv slix where
-  convertSliceIndex _ = unsafeCoerce
-    -- FIXME: the coercion is safe given the definition of the involved
-    --   families, but we really ought to code a proof for that instead
-
 
 -- Array operations
 -- ----------------
