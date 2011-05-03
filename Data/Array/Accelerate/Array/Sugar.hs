@@ -635,8 +635,7 @@ sinkFromElt2 f = \x y -> fromElt $ f (toElt x) (toElt y)
 --
 type family SliceAnyRepr a :: *
 type instance SliceAnyRepr Z            = ()
-type instance SliceAnyRepr Int          = ()
-type instance SliceAnyRepr (tail:.head) = (SliceAnyRepr tail, SliceAnyRepr head)
+type instance SliceAnyRepr (sl:.Int) = (SliceAnyRepr sl, ())
 
 --
 -- | Mapping from Shape element types to representation types for Shapes
@@ -644,8 +643,7 @@ type instance SliceAnyRepr (tail:.head) = (SliceAnyRepr tail, SliceAnyRepr head)
 --
 type family ShapeEltRepr a :: *
 type instance ShapeEltRepr Z            = ()
-type instance ShapeEltRepr Int          = Int
-type instance ShapeEltRepr (tail:.head) = (ShapeEltRepr tail, ShapeEltRepr head)
+type instance ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
 --
 -- | Class that characterises the elements allowed in shapes (but not
 --    slice specifiers)
@@ -662,20 +660,14 @@ instance ShapeElt Z where
   sliceAnyEltType _ = UnitTuple
   toSliceAnyRepr _ = ()
 
-instance ShapeElt Int where
-  sliceAnyEltType _ = UnitTuple
-  toSliceAnyRepr _ = ()
-
-instance (ShapeElt tail, ShapeElt head) => ShapeElt (tail:.head) where
-  sliceAnyEltType _ = PairTuple (sliceAnyEltType (undefined::tail))
-                                (sliceAnyEltType (undefined::head))
-  toSliceAnyRepr _ = (toSliceAnyRepr (undefined::tail), toSliceAnyRepr (undefined::head))
+instance ShapeElt sh => ShapeElt (sh:.Int) where
+  sliceAnyEltType _ = PairTuple (sliceAnyEltType (undefined::sh)) UnitTuple
+  toSliceAnyRepr _ = (toSliceAnyRepr (undefined::sh), ())
 
 type family SliceEltRepr a :: *
 type instance SliceEltRepr Z   = ()
-type instance SliceEltRepr All = ()
-type instance SliceEltRepr Int = Int
-type instance SliceEltRepr (tail:.head) = (SliceEltRepr tail, SliceEltRepr head)
+type instance SliceEltRepr (sl:.All) = (SliceEltRepr sl, ())
+type instance SliceEltRepr (sl:.Int) = (SliceEltRepr sl, Int)
 type instance SliceEltRepr (Any sh) = SliceAnyRepr sh
 
 
@@ -687,15 +679,11 @@ class (Typeable (SliceEltRepr a),
 instance SliceElt Z where
   sliceEltType _ = UnitTuple
 
-instance SliceElt All where
-  sliceEltType _ = UnitTuple
+instance SliceElt sl => SliceElt (sl:.All) where
+  sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) UnitTuple
 
-instance SliceElt Int where
-  sliceEltType _ = SingleTuple scalarType
-
-instance (SliceElt tail, SliceElt head) => SliceElt (tail:.head) where
-  sliceEltType _ = PairTuple (sliceEltType (undefined::tail))
-                             (sliceEltType (undefined::head))
+instance SliceElt sl => SliceElt (sl:.Int) where
+  sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) (SingleTuple scalarType)
 
 instance ShapeElt sh => SliceElt (Any sh) where
   sliceEltType _ = sliceAnyEltType (undefined ::sh)
