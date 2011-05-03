@@ -627,24 +627,6 @@ sinkFromElt2 f = \x y -> fromElt $ f (toElt x) (toElt y)
   #-}
 
 --
--- | Mapping from Shape element types to representation types for shapes, 'sh',
---   that appear inside a slice of form 'Any sh'.
--- 
--- This is because a slice of form 'Any (Z:.Int:. ... :.Int)' is effectively
--- the same as the slice 'Z:.All:. ... :. All'
---
-type family SliceAnyRepr a :: *
-type instance SliceAnyRepr Z            = ()
-type instance SliceAnyRepr (sl:.Int) = (SliceAnyRepr sl, ())
-
---
--- | Mapping from Shape element types to representation types for Shapes
---   (in module D.A.A.Array.Representation)
---
-type family ShapeEltRepr a :: *
-type instance ShapeEltRepr Z            = ()
-type instance ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
---
 -- | Class that characterises the elements allowed in shapes (but not
 --    slice specifiers)
 --
@@ -653,39 +635,50 @@ type instance ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
 class (Typeable (SliceAnyRepr a),
        ArrayElt (SliceAnyRepr a),
        SliceElt a) => ShapeElt a where
+  -- | Mapping from Shape element types to representation types for Shapes
+  --   (in module D.A.A.Array.Representation)
+  type ShapeEltRepr a :: *
+  -- | Mapping from Shape element types to representation types for shapes, 'sh',
+  --   that appear inside a slice of form 'Any sh'.
+  --
+  -- This is because a slice of form 'Any (Z:.Int:. ... :.Int)' is effectively
+  -- the same as the slice 'Z:.All:. ... :. All'
+  type SliceAnyRepr a :: *
   sliceAnyEltType :: {-dummy-} a -> TupleType (SliceAnyRepr a)
   toSliceAnyRepr  :: {-dummy-} a -> SliceAnyRepr a
 
 instance ShapeElt Z where
+  type ShapeEltRepr Z            = ()
+  type SliceAnyRepr Z            = ()
   sliceAnyEltType _ = UnitTuple
   toSliceAnyRepr _ = ()
 
 instance ShapeElt sh => ShapeElt (sh:.Int) where
+  type ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
+  type SliceAnyRepr (sl:.Int) = (SliceAnyRepr sl, ())
   sliceAnyEltType _ = PairTuple (sliceAnyEltType (undefined::sh)) UnitTuple
   toSliceAnyRepr _ = (toSliceAnyRepr (undefined::sh), ())
-
-type family SliceEltRepr a :: *
-type instance SliceEltRepr Z   = ()
-type instance SliceEltRepr (sl:.All) = (SliceEltRepr sl, ())
-type instance SliceEltRepr (sl:.Int) = (SliceEltRepr sl, Int)
-type instance SliceEltRepr (Any sh) = SliceAnyRepr sh
-
 
 class (Typeable (SliceEltRepr a),
        ArrayElt (SliceEltRepr a),
        Elt a) => SliceElt a where
+  type SliceEltRepr a :: *
   sliceEltType :: {-dummy-} a -> TupleType (SliceEltRepr a)
 
 instance SliceElt Z where
+  type SliceEltRepr Z   = ()
   sliceEltType _ = UnitTuple
 
 instance SliceElt sl => SliceElt (sl:.All) where
+  type SliceEltRepr (sl:.All) = (SliceEltRepr sl, ())
   sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) UnitTuple
 
 instance SliceElt sl => SliceElt (sl:.Int) where
+  type SliceEltRepr (sl:.Int) = (SliceEltRepr sl, Int)
   sliceEltType _ = PairTuple (sliceEltType (undefined::sl)) (SingleTuple scalarType)
 
 instance ShapeElt sh => SliceElt (Any sh) where
+  type SliceEltRepr (Any sh) = SliceAnyRepr sh
   sliceEltType _ = sliceAnyEltType (undefined ::sh)
 
 -- Surface arrays
