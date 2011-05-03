@@ -660,7 +660,6 @@ instance ShapeElt Z where
   toShapeElt  ()    = Z
   toSliceAnyRepr _  = ()
 
-
 instance ShapeElt sh => ShapeElt (sh:.Int) where
   type ShapeEltRepr (sh:.Int) = (ShapeEltRepr sh, Int)
   type SliceAnyRepr (sh:.Int) = (SliceAnyRepr sh, ())
@@ -712,7 +711,7 @@ instance ShapeElt sh => SliceElt (Any sh) where
 --
 data Array sh e where
   Array :: (Shape sh, Elt e) 
-        => EltRepr sh               -- extent of dimensions = shape
+        => ShapeEltRepr sh            -- extent of dimensions = shape
         -> ArrayData (EltRepr e)      -- array payload
         -> Array sh e
 
@@ -872,7 +871,7 @@ instance (Shape sh,
 -- |Yield an array's shape
 --
 shape :: Shape sh => Array sh e -> sh
-shape (Array sh _) = toElt sh
+shape (Array sh _) = toShapeElt sh
 
 -- |Array indexing
 --
@@ -881,13 +880,13 @@ infixl 9 !
 {-# INLINE (!) #-}
 -- (Array sh adata) ! ix = toElt (adata `indexArrayData` index sh ix)
 -- FIXME: using this due to a bug in 6.10.x
-(!) (Array sh adata) ix = toElt (adata `indexArrayData` index (toElt sh) ix)
+(!) (Array sh adata) ix = toElt (adata `indexArrayData` index (toShapeElt sh) ix)
 
 -- |Create an array from its representation function
 --
 newArray :: (Shape sh, Elt e) => sh -> (sh -> e) -> Array sh e
 {-# INLINE newArray #-}
-newArray sh f = adata `seq` Array (fromElt sh) adata
+newArray sh f = adata `seq` Array (fromShapeElt sh) adata
   where 
     (adata, _) = runArrayData $ do
                    arr <- newArrayData (1024 `max` size sh)
@@ -900,7 +899,7 @@ newArray sh f = adata `seq` Array (fromElt sh) adata
 --
 allocateArray :: (Shape sh, Elt e) => sh -> Array sh e
 {-# INLINE allocateArray #-}
-allocateArray sh = adata `seq` Array (fromElt sh) adata
+allocateArray sh = adata `seq` Array (fromShapeElt sh) adata
   where
     (adata, _) = runArrayData $ (,undefined) `fmap` newArrayData (1024 `max` size sh)
 
@@ -935,12 +934,12 @@ fromList sh l = newArray sh indexIntoList
 toList :: forall sh e. Array sh e -> [e]
 toList (Array sh adata) = iter sh' idx (.) id []
   where
-    sh'    = toElt sh :: sh
+    sh'    = toShapeElt sh :: sh
     idx ix = \l -> toElt (adata `indexArrayData` index sh' ix) : l
 
 -- Convert an array to a string
 --
 instance Show (Array sh e) where
   show arr@(Array sh _adata) 
-    = "Array " ++ show (toElt sh :: sh) ++ " " ++ show (toList arr)
+    = "Array " ++ show (toShapeElt sh :: sh) ++ " " ++ show (toList arr)
 
